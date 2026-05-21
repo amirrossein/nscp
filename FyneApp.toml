@@ -1,0 +1,10 @@
+Website = "https://github.com/amirrossein/nscp"
+
+[Details]
+  Copyright = "© 2025 NSCP Authors"
+  License = "MIT"
+
+[Application]
+  ID = "com.nscp.app"
+  Name = "NSCP"
+  Version = "0.1.0"
