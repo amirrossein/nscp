@@ -215,7 +215,7 @@ func TestProxyJumpViaSSHConfig(t *testing.T) {
 	}
 	fp := &fakePrompter{accept: true}
 	d, _, _ := newDialer(t, fp)
-	d.SSHConfig = cfg
+	d.SetSSHConfig(cfg)
 	p := profile.NewProfile()
 	p.SSHConfigAlias = "app"
 	c, err := d.Connect(context.Background(), p)

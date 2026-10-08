@@ -117,8 +117,22 @@ type Dialer struct {
 	Creds      credential.Store
 	Profiles   *profile.Store
 	KnownHosts *KnownHosts
-	SSHConfig  *sshconfig.Config
 	Prompter   Prompter
+
+	cfgMu     sync.Mutex
+	sshConfig *sshconfig.Config
+}
+
+func (d *Dialer) SetSSHConfig(c *sshconfig.Config) {
+	d.cfgMu.Lock()
+	d.sshConfig = c
+	d.cfgMu.Unlock()
+}
+
+func (d *Dialer) SSHConfig() *sshconfig.Config {
+	d.cfgMu.Lock()
+	defer d.cfgMu.Unlock()
+	return d.sshConfig
 }
 
 type hop struct {
@@ -168,12 +182,18 @@ func (d *Dialer) Connect(ctx context.Context, p profile.Profile) (*Client, error
 	return newClient(prev, opened[:len(opened)-1]), nil
 }
 
+// Endpoint describes where a profile connects, after applying ~/.ssh/config.
+func (d *Dialer) Endpoint(p profile.Profile) (user, addr, proxyJump string) {
+	h, jump := d.resolveProfile(p)
+	return h.user, h.addr, jump
+}
+
 func (d *Dialer) resolveProfile(p profile.Profile) (hop, string) {
 	h := hop{profileID: p.ID}
 	h.keyring = p.KeyringService()
 	jump := p.ProxyJump
-	if p.SSHConfigAlias != "" && d.SSHConfig != nil {
-		r := d.SSHConfig.Resolve(p.SSHConfigAlias)
+	if cfg := d.SSHConfig(); p.SSHConfigAlias != "" && cfg != nil {
+		r := cfg.Resolve(p.SSHConfigAlias)
 		h.user, h.addr = r.User, net.JoinHostPort(r.HostName, strconv.Itoa(r.Port))
 		if p.KeyPath != "" {
 			h.identityFiles = append(h.identityFiles, p.KeyPath)
@@ -225,8 +245,8 @@ func (d *Dialer) resolveJumps(spec string) ([]hop, error) {
 		}
 		h := hop{target: target{useAgent: true, identityFiles: DefaultIdentityFiles()}}
 		hostname := host
-		if d.SSHConfig != nil {
-			r := d.SSHConfig.Resolve(host)
+		if cfg := d.SSHConfig(); cfg != nil {
+			r := cfg.Resolve(host)
 			hostname = r.HostName
 			if user == "" {
 				user = r.User

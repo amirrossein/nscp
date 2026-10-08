@@ -58,7 +58,9 @@ func (m *Manager) Acquire(ctx context.Context, p profile.Profile) (*Client, func
 	m.mu.Unlock()
 
 	c, err := m.dialer.Connect(ctx, p)
+	m.mu.Lock()
 	e.client, e.err = c, err
+	m.mu.Unlock()
 	close(e.ready)
 	if err != nil {
 		m.mu.Lock()
@@ -87,6 +89,20 @@ func (m *Manager) release(id string, e *managed) {
 	if last && e.client != nil {
 		e.client.Close()
 	}
+}
+
+// Retain adds a reference to an already-connected client so it outlives the
+// pane that opened it, e.g. while a queued transfer still needs it.
+func (m *Manager) Retain(c *Client) (func(), bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, e := range m.conns {
+		if e.client == c && !isClosed(c) {
+			e.refs++
+			return m.releaser(id, e), true
+		}
+	}
+	return nil, false
 }
 
 func (m *Manager) CloseAll() {
