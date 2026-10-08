@@ -1,6 +1,8 @@
 package profile
 
 import (
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +13,7 @@ type AuthMethod string
 const (
 	AuthPassword AuthMethod = "password"
 	AuthKey      AuthMethod = "key"
+	AuthAgent    AuthMethod = "agent"
 )
 
 type HostKeyRecord struct {
@@ -26,6 +29,9 @@ type Profile struct {
 	Username        string         `json:"username"`
 	AuthMethod      AuthMethod     `json:"authMethod"`
 	KeyPath         string         `json:"keyPath,omitempty"`
+	UseAgent        bool           `json:"useAgent,omitempty"`
+	ProxyJump       string         `json:"proxyJump,omitempty"`
+	SSHConfigAlias  string         `json:"sshConfigAlias,omitempty"`
 	SavePassword    bool           `json:"savePassword"`
 	SavePassphrase  bool           `json:"savePassphrase"`
 	LastUsedAt      time.Time      `json:"lastUsedAt,omitempty"`
@@ -41,4 +47,25 @@ func NewProfile() Profile {
 
 func (p *Profile) KeyringService() string {
 	return "nscp:" + p.ID
+}
+
+func (p *Profile) Addr() string {
+	port := p.Port
+	if port == 0 {
+		port = 22
+	}
+	return net.JoinHostPort(p.Host, strconv.Itoa(port))
+}
+
+func (p *Profile) Title() string {
+	if p.DisplayName != "" {
+		return p.DisplayName
+	}
+	if p.SSHConfigAlias != "" {
+		return p.SSHConfigAlias
+	}
+	if p.Username != "" {
+		return p.Username + "@" + p.Host
+	}
+	return p.Host
 }
