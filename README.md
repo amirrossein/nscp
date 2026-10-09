@@ -1,5 +1,7 @@
 # Neo SCP
 
+![NSCP](docs/screenshot.png)
+
 A cross-platform desktop app for copying files over SCP, built with Go and [Fyne](https://fyne.io).
 
 NSCP shows two panes side by side. Each pane is a directory tree on your computer or on an SSH

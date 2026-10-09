@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image/color"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -42,9 +40,13 @@ type Pane struct {
 	showHidden bool
 
 	tree      *widget.Tree
+	host      *hostChip
+	crumbs    *fyne.Container
 	pathEntry *widget.Entry
-	hostBtn   *widget.Button
+	pathStack *fyne.Container
+	editPath  *widget.Button
 	hiddenBtn *widget.Button
+	footer    *widget.Label
 	frame     *canvas.Rectangle
 	rows      map[*fileRow]struct{}
 	content   fyne.CanvasObject
@@ -68,34 +70,8 @@ func newPane(m *MainWindow, idx int) *Pane {
 		}
 	}
 
-	p.hostBtn = widget.NewButtonWithIcon("Local  ▾", theme.ComputerIcon(), p.showHostMenu)
-	p.hostBtn.Alignment = widget.ButtonAlignLeading
-	p.pathEntry = widget.NewEntry()
-	p.pathEntry.OnSubmitted = p.goToTyped
-
-	up := widget.NewButtonWithIcon("", theme.MoveUpIcon(), p.goUp)
-	home := widget.NewButtonWithIcon("", theme.HomeIcon(), func() { p.navigate(p.home) })
-	refresh := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), p.refreshAll)
-	newFolder := widget.NewButtonWithIcon("", theme.FolderNewIcon(), func() { p.newFolder(p.root) })
-	p.hiddenBtn = widget.NewButtonWithIcon("", theme.VisibilityOffIcon(), p.toggleHidden)
-	copyIcon := theme.NavigateNextIcon()
-	if idx == 1 {
-		copyIcon = theme.NavigateBackIcon()
-	}
-	copyBtn := widget.NewButtonWithIcon("Copy", copyIcon, p.copySelectedToOther)
-
-	toolbar := container.NewBorder(nil, nil,
-		container.NewHBox(up, home, refresh),
-		container.NewHBox(newFolder, p.hiddenBtn, copyBtn),
-		p.pathEntry)
-	header := container.NewVBox(p.hostBtn, toolbar)
-
-	p.frame = canvas.NewRectangle(color.Transparent)
-	p.frame.StrokeColor = theme.Color(theme.ColorNamePrimary)
-	p.frame.StrokeWidth = 2
-	p.frame.Hide()
-
-	p.content = container.NewBorder(header, nil, nil, nil, container.NewStack(p.tree, p.frame))
+	p.tree.HideSeparators = true
+	p.buildChrome()
 	return p
 }
 
@@ -115,8 +91,7 @@ func (p *Pane) setLocal() {
 	}
 	p.dropConnection()
 	p.setFS(local, home, home)
-	p.hostBtn.SetText("Local  ▾")
-	p.hostBtn.SetIcon(theme.ComputerIcon())
+	p.host.Set(theme.ComputerIcon(), "This computer", "Local files", false)
 }
 
 func (p *Pane) setRemote(prof profile.Profile, c *sshclient.Client, release func(), fsys *vfs.RemoteFS, home string) {
@@ -125,8 +100,8 @@ func (p *Pane) setRemote(prof profile.Profile, c *sshclient.Client, release func
 	p.client = c
 	p.release = release
 	p.setFS(fsys, home, home)
-	p.hostBtn.SetText(prof.Title() + "  ▾")
-	p.hostBtn.SetIcon(theme.StorageIcon())
+	user, addr, _ := p.m.deps.Dialer.Endpoint(prof)
+	p.host.Set(theme.StorageIcon(), prof.Title(), user+"@"+addr, true)
 
 	go func() {
 		<-c.Done()
@@ -172,6 +147,9 @@ func (p *Pane) setRoot(root string) {
 	p.tree.UnselectAll()
 	p.tree.ScrollToTop()
 	p.pathEntry.SetText(root)
+	p.setEditingPath(false)
+	p.updateBreadcrumb()
+	p.updateFooter()
 	p.tree.Refresh()
 }
 
@@ -237,6 +215,7 @@ func (p *Pane) toggleHidden() {
 	} else {
 		p.hiddenBtn.SetIcon(theme.VisibilityOffIcon())
 	}
+	p.updateFooter()
 	p.tree.Refresh()
 }
 
@@ -266,6 +245,9 @@ func (p *Pane) load(dir string) {
 					p.entries[e.Path] = e
 				}
 				p.children[dir] = ids
+			}
+			if dir == p.root {
+				p.updateFooter()
 			}
 			p.tree.Refresh()
 		})

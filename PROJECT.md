@@ -102,6 +102,10 @@ nscp/
 │       ├── conflict.go       ← Overwrite / Skip / Overwrite all / Cancel
 │       ├── transfers.go      ← transfer queue panel
 │       ├── fileops.go        ← context menu, new folder, rename, delete
+│       ├── theme.go          ← nscpTheme: always-dark macOS-style palette, sizes, chevron icons
+│       ├── widgets.go        ← card, pill, thinBar, hostChip, fillFirst/fixedHeight layouts
+│       ├── chrome.go         ← pane header: host chip, tools, breadcrumbs, column header, footer
+│       ├── icons.go          ← file-type icons, short timestamps
 │       └── format.go         ← humanBytes, runOnMain
 ├── tests/integration/        ← Docker-backed tests (build tag: integration) + sshd Dockerfile
 ├── FyneApp.toml
@@ -177,6 +181,16 @@ nscp/
 - Copying a folder into itself, or onto itself, is rejected.
 
 ### `internal/ui`
+- **Visual design** (modelled on modern macOS dark apps):
+  - The app always uses `nscpTheme`, which is dark only: a near-black window, raised rounded
+    cards (`newCard`), and one blue accent (#0A84FF) for selection, folders and progress.
+  - Secondary text uses `newCaption`.
+  - Toolbar buttons are flat (`newFlatButton`). Only primary actions use a filled button.
+  - Colours come from the palette vars in `theme.go`; don't hard-code colours elsewhere.
+  - Theme icons must not be resolved in package-level vars, because the Fyne app doesn't exist
+    yet at init time.
+- Custom rows and composites must be real widgets (`BaseWidget` plus a renderer) or
+  `*fyne.Container`s; Fyne's painter does not walk into other wrapper types.
 - All widget mutations happen on the main goroutine. Background work calls `runOnMain(func(){…})`,
   which is `fyne.Do` in the app and a test-controlled queue in tests.
 - The tree keeps `Root == ""` (Fyne draws a non-empty root as a row) and maps `""` to

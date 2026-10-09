@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 
 	"github.com/amirrossein/nscp/internal/credential"
 	"github.com/amirrossein/nscp/internal/profile"
@@ -42,7 +43,9 @@ type MainWindow struct {
 
 func NewMainWindow(a fyne.App, deps Deps) *MainWindow {
 	m := &MainWindow{app: a, deps: deps, jobRefs: map[int64][]func(){}}
+	a.Settings().SetTheme(nscpTheme{})
 	m.win = a.NewWindow("NSCP")
+	m.win.SetPadded(false)
 	m.prompter = newPrompter(m.win)
 	deps.Dialer.Prompter = m.prompter
 
@@ -57,10 +60,12 @@ func NewMainWindow(a fyne.App, deps Deps) *MainWindow {
 	}
 	m.transfers = newTransfersPanel(m)
 
-	split := container.NewHSplit(m.panes[0].content, m.panes[1].content)
-	vsplit := container.NewVSplit(split, m.transfers.content)
-	vsplit.Offset = 0.75
-	m.win.SetContent(container.NewStack(vsplit, m.dnd.layer))
+	panes := container.NewHSplit(m.panes[0].content, m.panes[1].content)
+	transfers := container.New(&fixedHeight{190}, m.transfers.content)
+	body := container.New(&fillFirst{gap: 10}, panes, transfers)
+	m.win.SetContent(container.NewStack(
+		container.New(layout.NewCustomPaddedLayout(12, 12, 12, 12), body),
+		m.dnd.layer))
 	m.win.SetOnDropped(m.onOSDrop)
 	m.win.Resize(fyne.NewSize(1200, 760))
 	m.win.SetOnClosed(func() {

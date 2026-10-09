@@ -4,6 +4,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -29,11 +30,12 @@ type dragCoordinator struct {
 
 func newDragCoordinator(m *MainWindow) *dragCoordinator {
 	d := &dragCoordinator{m: m, label: widget.NewLabel("")}
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameOverlayBackground))
-	bg.StrokeColor = theme.Color(theme.ColorNamePrimary)
-	bg.StrokeWidth = 1
-	bg.CornerRadius = 4
-	d.ghost = container.NewStack(bg, container.NewHBox(widget.NewIcon(theme.ContentCopyIcon()), d.label))
+	d.label.TextStyle.Bold = true
+	bg := canvas.NewRectangle(colAccent)
+	bg.CornerRadius = 10
+	icon := widget.NewIcon(theme.NewColoredResource(theme.ContentCopyIcon(), theme.ColorNameForegroundOnPrimary))
+	d.ghost = container.NewStack(bg, container.New(layout.NewCustomPaddedHBoxLayout(4),
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(16, 16), icon)), d.label))
 	d.ghost.Hide()
 	d.layer = container.NewWithoutLayout(d.ghost)
 	return d

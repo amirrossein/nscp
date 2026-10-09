@@ -14,6 +14,8 @@ import (
 	"github.com/amirrossein/nscp/internal/credential"
 	"github.com/amirrossein/nscp/internal/profile"
 	"github.com/amirrossein/nscp/internal/sshclient"
+	"github.com/amirrossein/nscp/internal/transfer"
+	"github.com/amirrossein/nscp/internal/vfs"
 )
 
 var mainQueue = make(chan func(), 4096)
@@ -75,7 +77,7 @@ func TestBothPanesStartLocalAtHome(t *testing.T) {
 	m := newTestWindow(t)
 	home, _ := os.UserHomeDir()
 	for _, p := range m.panes {
-		if p.fs.Label() != "Local" || p.root != home || p.hostBtn.Text != "Local  ▾" {
+		if p.fs.Label() != "Local" || p.root != home || p.host.title.Text != "This computer" {
 			t.Fatalf("pane %d: label=%s root=%s", p.idx, p.fs.Label(), p.root)
 		}
 	}
@@ -282,6 +284,21 @@ func TestScreenshot(t *testing.T) {
 	pump(t, "branch", func() bool { _, ok := m.panes[0].children[filepath.Join(root, "projects")]; return ok })
 	m.panes[0].tree.Refresh()
 	m.panes[1].tree.Refresh()
+	m.panes[1].tree.Select(filepath.Join(root, "report.pdf"))
+
+	dst := t.TempDir()
+	local := vfs.LocalFS{}
+	ok := transfer.NewJob(local, vfs.Entry{Name: "report.pdf", Path: filepath.Join(root, "report.pdf")}, local, dst)
+	bad := transfer.NewJob(local, vfs.Entry{Name: "todo.txt", Path: filepath.Join(root, "todo.txt")}, local, filepath.Join(dst, "missing"))
+	waiting := transfer.NewJob(local, vfs.Entry{Name: "photos", Path: filepath.Join(root, "photos"), IsDir: true}, local, dst)
+	transfer.Run(ok)
+	transfer.Run(bad)
+	for _, j := range []*transfer.Job{ok, bad, waiting} {
+		m.queue.Submit(j)
+	}
+	pump(t, "jobs", func() bool { return waiting.Status().Terminal() })
+	m.transfers.refresh()
+
 	f, err := os.Create(out)
 	if err != nil {
 		t.Fatal(err)

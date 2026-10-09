@@ -18,10 +18,11 @@ type fileRow struct {
 	pane *Pane
 	uid  string
 
-	bg   *canvas.Rectangle
-	icon *widget.Icon
-	name *widget.Label
-	size *widget.Label
+	bg       *canvas.Rectangle
+	icon     *widget.Icon
+	name     *widget.Label
+	size     *widget.Label
+	modified *widget.Label
 }
 
 var (
@@ -33,22 +34,23 @@ var (
 
 func newFileRow(p *Pane) *fileRow {
 	r := &fileRow{
-		pane: p,
-		bg:   canvas.NewRectangle(color.Transparent),
-		icon: widget.NewIcon(theme.FileIcon()),
-		name: widget.NewLabel(""),
-		size: widget.NewLabel(""),
+		pane:     p,
+		bg:       canvas.NewRectangle(color.Transparent),
+		icon:     widget.NewIcon(theme.FileIcon()),
+		name:     widget.NewLabel(""),
+		size:     trailing(newCaption("")),
+		modified: trailing(newCaption("")),
 	}
+	r.bg.CornerRadius = 6
 	r.name.Truncation = fyne.TextTruncateEllipsis
-	r.size.Importance = widget.LowImportance
-	r.size.Alignment = fyne.TextAlignTrailing
 	r.ExtendBaseWidget(r)
 	return r
 }
 
 func (r *fileRow) CreateRenderer() fyne.WidgetRenderer {
+	meta := container.NewHBox(fixedWidth(sizeColWidth, r.size), fixedWidth(modifiedColWidth, r.modified))
 	return widget.NewSimpleRenderer(container.NewStack(r.bg,
-		container.NewBorder(nil, nil, r.icon, container.NewGridWrap(fyne.NewSize(96, r.size.MinSize().Height), r.size), r.name)))
+		container.NewBorder(nil, nil, r.icon, meta, r.name)))
 }
 
 func (r *fileRow) placeholder() bool {
@@ -108,18 +110,20 @@ func (p *Pane) updateNode(uid string, _ bool, o fyne.CanvasObject) {
 	r.uid = uid
 	r.setHighlight(false)
 	r.name.Importance = widget.MediumImportance
+	r.name.TextStyle = fyne.TextStyle{}
 	r.size.SetText("")
+	r.modified.SetText("")
 
 	switch {
 	case strings.HasPrefix(uid, placeholderPrefix+"loading:"):
-		r.icon.SetResource(theme.HistoryIcon())
+		r.icon.SetResource(theme.NewColoredResource(theme.HistoryIcon(), theme.ColorNamePlaceHolder))
 		r.name.SetText("Loading…")
 		r.name.Importance = widget.LowImportance
 		r.name.Refresh()
 		return
 	case strings.HasPrefix(uid, placeholderPrefix+"error:"):
 		dir := strings.TrimPrefix(uid, placeholderPrefix+"error:")
-		r.icon.SetResource(theme.ErrorIcon())
+		r.icon.SetResource(theme.NewErrorThemedResource(theme.ErrorIcon()))
 		msg := "Error"
 		if err := p.errs[dir]; err != nil {
 			msg = firstLine(err.Error())
@@ -132,17 +136,17 @@ func (p *Pane) updateNode(uid string, _ bool, o fyne.CanvasObject) {
 
 	e := p.entries[uid]
 	r.name.SetText(e.Name)
+	r.icon.SetResource(iconFor(e.Name, e.IsDir, e.IsLink))
 	switch {
-	case e.IsDir && e.IsLink:
-		r.icon.SetResource(theme.FolderOpenIcon())
 	case e.IsDir:
-		r.icon.SetResource(theme.FolderIcon())
+		r.size.SetText("—")
 	case e.IsLink:
-		r.icon.SetResource(theme.FileIcon())
 		r.size.SetText("link")
 	default:
-		r.icon.SetResource(theme.FileIcon())
 		r.size.SetText(humanBytes(e.Size))
+	}
+	if !e.ModTime.IsZero() {
+		r.modified.SetText(shortTime(e.ModTime))
 	}
 }
 

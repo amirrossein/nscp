@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -19,6 +20,10 @@ type transfersPanel struct {
 	jobs    []*transfer.Job
 	list    *widget.List
 	summary *widget.Label
+	count   *pill
+	clear   *widget.Button
+	header  *fyne.Container
+	empty   *widget.Label
 	content fyne.CanvasObject
 	done    chan struct{}
 }
@@ -30,19 +35,28 @@ func newTransfersPanel(m *MainWindow) *transfersPanel {
 		t.createRow,
 		t.updateRow,
 	)
+	t.list.HideSeparators = true
 	t.list.OnSelected = func(id widget.ListItemID) {
 		t.list.UnselectAll()
 		if id < len(t.jobs) {
 			t.showDetails(t.jobs[id])
 		}
 	}
-	t.summary = widget.NewLabel("No transfers")
-	clear := widget.NewButtonWithIcon("Clear finished", theme.DeleteIcon(), func() {
+	t.count = newPill("0", colSecondary, colRaised)
+	t.count.Hide()
+	t.summary = newCaption("")
+	t.empty = newCaption("Drag a file or folder onto the other pane to copy it.")
+	t.empty.Alignment = fyne.TextAlignCenter
+	t.clear = newFlatButton("Clear finished", theme.DeleteIcon(), func() {
 		m.queue.ClearFinished()
 		t.refresh()
 	})
-	header := container.NewBorder(nil, nil, widget.NewLabelWithStyle("Transfers", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), clear, t.summary)
-	t.content = container.NewBorder(header, nil, nil, nil, t.list)
+	t.clear.Hide()
+	title := widget.NewLabelWithStyle("Transfers", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	left := container.New(layout.NewCustomPaddedHBoxLayout(6), title, container.NewCenter(t.count), t.summary)
+	t.header = container.NewBorder(nil, nil, left, t.clear)
+	body := container.NewStack(t.list, container.NewCenter(t.empty))
+	t.content = newCard(container.NewBorder(t.header, nil, nil, nil, body))
 	go t.tick()
 	return t
 }
@@ -79,44 +93,65 @@ func (t *transfersPanel) refresh() {
 	}
 	switch {
 	case len(t.jobs) == 0:
-		t.summary.SetText("No transfers")
-	case active > 0:
-		t.summary.SetText(fmt.Sprintf("%d active", active))
+		t.summary.SetText("")
+		t.count.Hide()
+		t.empty.Show()
 	default:
-		t.summary.SetText("All done")
+		t.empty.Hide()
+		t.count.SetText(fmt.Sprint(len(t.jobs)))
+		t.count.Show()
+		if active > 0 {
+			t.summary.SetText(fmt.Sprintf("%d in progress", active))
+		} else {
+			t.summary.SetText("All finished")
+		}
 	}
+	if active < len(t.jobs) {
+		t.clear.Show()
+	} else {
+		t.clear.Hide()
+	}
+	t.header.Refresh()
 	t.list.Refresh()
 }
 
 type jobRow struct {
-	icon   *widget.Icon
-	title  *widget.Label
-	detail *widget.Label
-	bar    *widget.ProgressBar
-	cancel *widget.Button
+	widget.BaseWidget
+	content fyne.CanvasObject
+	icon    *widget.Icon
+	title   *widget.Label
+	detail  *widget.Label
+	bar     *thinBar
+	percent *widget.Label
+	cancel  *widget.Button
+}
+
+func (r *jobRow) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(r.content)
 }
 
 func (t *transfersPanel) createRow() fyne.CanvasObject {
 	r := &jobRow{
-		icon:   widget.NewIcon(theme.UploadIcon()),
-		title:  widget.NewLabel(""),
-		detail: widget.NewLabel(""),
-		bar:    widget.NewProgressBar(),
-		cancel: widget.NewButtonWithIcon("", theme.CancelIcon(), nil),
+		icon:    widget.NewIcon(theme.UploadIcon()),
+		title:   widget.NewLabel(""),
+		detail:  newCaption(""),
+		bar:     newThinBar(),
+		percent: trailing(newCaption("")),
+		cancel:  newFlatButton("", theme.CancelIcon(), nil),
 	}
 	r.title.Truncation = fyne.TextTruncateEllipsis
+	r.title.TextStyle.Bold = true
 	r.detail.Truncation = fyne.TextTruncateEllipsis
-	r.detail.Importance = widget.LowImportance
-	barBox := container.NewGridWrap(fyne.NewSize(180, r.bar.MinSize().Height), r.bar)
-	right := container.NewHBox(container.NewCenter(barBox), r.cancel)
-	body := container.NewGridWithColumns(2, r.title, r.detail)
-	c := container.NewBorder(nil, nil, r.icon, right, body)
-	return &rowHolder{Container: c, row: r}
-}
-
-type rowHolder struct {
-	*fyne.Container
-	row *jobRow
+	text := container.New(layout.NewCustomPaddedVBoxLayout(-8), r.title, r.detail)
+	progress := container.NewHBox(
+		container.NewCenter(fixedWidth(180, r.bar)),
+		fixedWidth(44, r.percent),
+		r.cancel,
+	)
+	iconBox := container.NewCenter(container.NewGridWrap(fyne.NewSize(20, 20), r.icon))
+	r.content = container.NewBorder(nil, nil, iconBox, container.NewCenter(progress), text)
+	r.ExtendBaseWidget(r)
+	return r
 }
 
 func (t *transfersPanel) updateRow(id widget.ListItemID, o fyne.CanvasObject) {
@@ -124,45 +159,50 @@ func (t *transfersPanel) updateRow(id widget.ListItemID, o fyne.CanvasObject) {
 		return
 	}
 	j := t.jobs[id]
-	r := o.(*rowHolder).row
+	r := o.(*jobRow)
 	s := j.Snapshot()
 
-	r.title.SetText(fmt.Sprintf("%s  →  %s:%s", j.Source.Name, j.Dst.Label(), j.DstDir))
+	r.title.SetText(fmt.Sprintf("%s  →  %s", j.Source.Name, j.Dst.Label()))
+	frac := 0.0
 	if s.BytesTotal > 0 {
-		r.bar.SetValue(float64(s.BytesDone) / float64(s.BytesTotal))
+		frac = float64(s.BytesDone) / float64(s.BytesTotal)
 	} else if s.Status == transfer.Done {
-		r.bar.SetValue(1)
-	} else {
-		r.bar.SetValue(0)
+		frac = 1
 	}
+	r.percent.SetText(fmt.Sprintf("%d%%", int(frac*100)))
 	r.detail.Importance = widget.LowImportance
+	barColor := colAccent
 	switch s.Status {
 	case transfer.Queued:
-		r.icon.SetResource(theme.HistoryIcon())
-		r.detail.SetText("Queued")
+		r.icon.SetResource(theme.NewColoredResource(theme.HistoryIcon(), theme.ColorNamePlaceHolder))
+		r.detail.SetText("Waiting · " + j.DstDir)
 	case transfer.Running:
-		r.icon.SetResource(theme.MediaPlayIcon())
-		text := fmt.Sprintf("%s / %s", humanBytes(s.BytesDone), humanBytes(s.BytesTotal))
+		r.icon.SetResource(theme.NewPrimaryThemedResource(theme.DownloadIcon()))
+		text := fmt.Sprintf("%s of %s", humanBytes(s.BytesDone), humanBytes(s.BytesTotal))
 		if s.FilesTotal > 1 {
-			text = fmt.Sprintf("%d/%d files · %s · %s", s.FilesDone, s.FilesTotal, text, s.Current)
+			text = fmt.Sprintf("%d of %d files · %s · %s", s.FilesDone, s.FilesTotal, text, s.Current)
 		}
 		r.detail.SetText(text)
 	case transfer.Done:
-		r.icon.SetResource(theme.ConfirmIcon())
-		text := "Done · " + humanBytes(s.BytesTotal)
+		barColor = colSuccess
+		r.icon.SetResource(theme.NewSuccessThemedResource(theme.ConfirmIcon()))
+		text := humanBytes(s.BytesTotal) + " · " + j.DstPath()
 		if n := len(s.Warnings); n > 0 {
-			text += fmt.Sprintf(" · %d warning(s)", n)
+			text = plural(n, "warning") + " · " + text
 			r.detail.Importance = widget.WarningImportance
 		}
 		r.detail.SetText(text)
 	case transfer.Failed:
-		r.icon.SetResource(theme.ErrorIcon())
+		barColor = colDanger
+		r.icon.SetResource(theme.NewErrorThemedResource(theme.ErrorIcon()))
 		r.detail.Importance = widget.DangerImportance
 		r.detail.SetText(firstLine(s.Err.Error()))
 	case transfer.Cancelled:
-		r.icon.SetResource(theme.CancelIcon())
+		barColor = colTertiary
+		r.icon.SetResource(theme.NewColoredResource(theme.CancelIcon(), theme.ColorNamePlaceHolder))
 		r.detail.SetText("Cancelled")
 	}
+	r.bar.Set(frac, barColor)
 	r.detail.Refresh()
 	if s.Status.Terminal() {
 		r.cancel.Hide()

@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/amirrossein/nscp/internal/profile"
@@ -23,7 +24,7 @@ const recentLimit = 8
 func (p *Pane) showHostMenu() {
 	m := p.m
 	items := []*fyne.MenuItem{
-		fyne.NewMenuItem("Local (this computer)", p.setLocal),
+		withIcon(fyne.NewMenuItem("This computer", p.setLocal), theme.ComputerIcon()),
 	}
 
 	all := m.deps.Profiles.List()
@@ -40,9 +41,9 @@ func (p *Pane) showHostMenu() {
 			var sub []*fyne.MenuItem
 			for _, a := range aliases {
 				alias := a
-				sub = append(sub, fyne.NewMenuItem(alias, func() { p.connectAlias(alias) }))
+				sub = append(sub, withIcon(fyne.NewMenuItem(alias, func() { p.connectAlias(alias) }), theme.StorageIcon()))
 			}
-			it := fyne.NewMenuItem("SSH config", nil)
+			it := withIcon(fyne.NewMenuItem("SSH config", nil), theme.DocumentIcon())
 			it.ChildMenu = fyne.NewMenu("", sub...)
 			items = append(items, it)
 		}
@@ -56,24 +57,24 @@ func (p *Pane) showHostMenu() {
 		for _, pr := range sorted {
 			sub = append(sub, p.profileItem(pr))
 		}
-		it := fyne.NewMenuItem("Saved servers", nil)
+		it := withIcon(fyne.NewMenuItem("Saved servers", nil), theme.ListIcon())
 		it.ChildMenu = fyne.NewMenu("", sub...)
 		items = append(items, it)
 	}
-	items = append(items, fyne.NewMenuItem("New connection…", func() {
+	items = append(items, withIcon(fyne.NewMenuItem("New connection…", func() {
 		p.showConnectDialog(nil)
-	}))
+	}), theme.ContentAddIcon()))
 	if p.prof != nil {
 		cur := *p.prof
 		items = append(items,
 			fyne.NewMenuItemSeparator(),
-			fyne.NewMenuItem(fmt.Sprintf("Edit %q…", cur.Title()), func() { p.showConnectDialog(&cur) }),
-			fyne.NewMenuItem("Disconnect", p.setLocal),
+			withIcon(fyne.NewMenuItem(fmt.Sprintf("Edit %q…", cur.Title()), func() { p.showConnectDialog(&cur) }), theme.SettingsIcon()),
+			withIcon(fyne.NewMenuItem("Disconnect", p.setLocal), theme.LogoutIcon()),
 		)
 	}
 
-	c := fyne.CurrentApp().Driver().CanvasForObject(p.hostBtn)
-	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(p.hostBtn).AddXY(0, p.hostBtn.Size().Height)
+	c := fyne.CurrentApp().Driver().CanvasForObject(p.host)
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(p.host).AddXY(0, p.host.Size().Height)
 	widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), c, pos)
 }
 
@@ -82,7 +83,12 @@ func (p *Pane) profileItem(pr profile.Profile) *fyne.MenuItem {
 	if pr.SSHConfigAlias == "" && pr.DisplayName != "" {
 		label += "  —  " + pr.Username + "@" + pr.Host
 	}
-	return fyne.NewMenuItem(label, func() { p.connect(pr) })
+	return withIcon(fyne.NewMenuItem(label, func() { p.connect(pr) }), theme.StorageIcon())
+}
+
+func withIcon(it *fyne.MenuItem, icon fyne.Resource) *fyne.MenuItem {
+	it.Icon = icon
+	return it
 }
 
 func (p *Pane) connectAlias(alias string) {
