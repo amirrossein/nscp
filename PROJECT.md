@@ -260,6 +260,7 @@ CopyFromRemote(src) ──► io.Pipe ──► CopyToRemote(dst, Size)   (bytes
 
 ```bash
 make run               # run in development
+make install           # install nscp into $(go env GOPATH)/bin so it runs from anywhere
 make build             # compile to bin/nscp
 make test              # go test -race ./...
 make vet               # go vet, including the integration package

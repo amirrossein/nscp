@@ -41,6 +41,7 @@ Requirements:
 ```bash
 make run     # start the app
 make build   # build bin/nscp
+make install # install `nscp` into $(go env GOPATH)/bin, then run `nscp` from anywhere
 make test    # unit tests (race detector on)
 make test-integration   # end-to-end tests against real OpenSSH servers in Docker
 ```

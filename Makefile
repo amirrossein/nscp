@@ -3,13 +3,20 @@ PKG      := ./cmd/nscp
 BIN      := bin/$(APP)
 FYNE     ?= fyne
 
-.PHONY: run build test test-integration lint vet package-macos package-windows package-linux clean
+.PHONY: run build install uninstall test test-integration lint vet package-macos package-windows package-linux clean
 
 run:
 	go run $(PKG)
 
 build:
 	go build -o $(BIN) $(PKG)
+
+# Installs the nscp binary into $(go env GOBIN) or $(go env GOPATH)/bin.
+install:
+	go install $(PKG)
+
+uninstall:
+	rm -f "$$(go env GOBIN)/$(APP)" "$$(go env GOPATH)/bin/$(APP)"
 
 test:
 	go test -race ./...
