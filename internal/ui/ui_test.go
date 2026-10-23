@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/amirrossein/nscp/internal/credential"
@@ -446,7 +447,7 @@ func TestAddressBarLeavesEditModeWhenClickingElsewhere(t *testing.T) {
 		}
 		return false
 	})
-	test.Tap(row)
+	row.MouseDown(&desktop.MouseEvent{Button: desktop.MouseButtonPrimary})
 	if editing() || p.selected != row.uid {
 		t.Fatal("clicking a row should end editing and select it")
 	}

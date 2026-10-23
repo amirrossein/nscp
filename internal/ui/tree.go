@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -30,6 +31,7 @@ var (
 	_ fyne.DoubleTappable    = (*fileRow)(nil)
 	_ fyne.SecondaryTappable = (*fileRow)(nil)
 	_ fyne.Draggable         = (*fileRow)(nil)
+	_ desktop.Mouseable      = (*fileRow)(nil)
 )
 
 func newFileRow(p *Pane) *fileRow {
@@ -57,12 +59,23 @@ func (r *fileRow) placeholder() bool {
 	return r.uid == "" || strings.HasPrefix(r.uid, placeholderPrefix)
 }
 
-func (r *fileRow) Tapped(*fyne.PointEvent) {
+// MouseDown does the work of a single click. Because the row is also
+// DoubleTappable, Fyne delays Tapped by the system double-click interval,
+// which made selecting and leaving path editing feel sluggish.
+func (r *fileRow) MouseDown(ev *desktop.MouseEvent) {
+	if ev.Button != desktop.MouseButtonPrimary {
+		return
+	}
 	r.pane.m.endPathEditing()
 	if !r.placeholder() {
 		r.pane.tree.Select(r.uid)
 	}
 }
+
+func (r *fileRow) MouseUp(*desktop.MouseEvent) {}
+
+// Tapped must exist so the row, not the tree node underneath, owns clicks.
+func (r *fileRow) Tapped(*fyne.PointEvent) {}
 
 func (r *fileRow) DoubleTapped(*fyne.PointEvent) {
 	r.pane.m.endPathEditing()
