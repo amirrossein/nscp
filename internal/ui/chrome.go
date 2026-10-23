@@ -90,9 +90,10 @@ func (p *Pane) setEditingPath(editing bool) {
 		p.pathEntry.Show()
 		p.pathStack.Objects[0].Hide()
 		p.editPath.SetIcon(theme.CancelIcon())
-		if c := fyne.CurrentApp().Driver().CanvasForObject(p.pathEntry); c != nil {
-			c.Focus(p.pathEntry)
-		}
+		// Use the window's canvas: CanvasForObject only knows recently drawn
+		// objects, so it returns nil for an entry that has been hidden a while
+		// and the first click would show the field without focusing it.
+		p.m.win.Canvas().Focus(p.pathEntry)
 		return
 	}
 	p.pathEntry.Hide()
@@ -109,7 +110,7 @@ func (p *Pane) pathFocusLost() {
 		if p.pathEntry.Hidden {
 			return
 		}
-		if c := fyne.CurrentApp().Driver().CanvasForObject(p.pathEntry); c != nil && c.Focused() == p.pathEntry {
+		if p.m.win.Canvas().Focused() == p.pathEntry {
 			return
 		}
 		p.setEditingPath(false)

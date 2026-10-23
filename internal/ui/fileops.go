@@ -38,7 +38,7 @@ func (p *Pane) showContextMenu(uid string, pos fyne.Position) {
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Refresh", func() { p.reload(dir) }),
 	)
-	c := fyne.CurrentApp().Driver().CanvasForObject(p.tree)
+	c := p.m.win.Canvas()
 	widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), c, pos)
 }
 

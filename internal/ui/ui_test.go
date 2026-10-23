@@ -331,6 +331,9 @@ func TestAddressBarClickEditsAndEscapeCancels(t *testing.T) {
 	if p.pathEntry.Hidden || p.pathEntry.Text != root {
 		t.Fatalf("click should start editing the current path (hidden=%v text=%q)", p.pathEntry.Hidden, p.pathEntry.Text)
 	}
+	if m.win.Canvas().Focused() != p.pathEntry {
+		t.Fatal("one click must focus the field so typing works immediately")
+	}
 	p.pathEntry.TypedKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
 	if !p.pathEntry.Hidden || p.root != root {
 		t.Fatal("Escape should leave edit mode without navigating")

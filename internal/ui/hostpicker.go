@@ -73,7 +73,7 @@ func (p *Pane) showHostMenu() {
 		)
 	}
 
-	c := fyne.CurrentApp().Driver().CanvasForObject(p.host)
+	c := p.m.win.Canvas()
 	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(p.host).AddXY(0, p.host.Size().Height)
 	widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), c, pos)
 }
