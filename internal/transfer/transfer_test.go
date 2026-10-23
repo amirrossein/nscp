@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -274,4 +275,31 @@ func TestRemoteToLocalAndRelay(t *testing.T) {
 		t.Fatalf("relay: %v %v", s.Status, s.Err)
 	}
 	checkTree(t, filepath.Join(dst, "tree"), files)
+}
+
+func TestQueueClearCancelsUnfinished(t *testing.T) {
+	finished := make(chan *Job, 4)
+	q := NewQueue(func(j *Job) { finished <- j })
+	defer q.Close()
+	l := vfs.LocalFS{}
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "a"), []byte("a"), 0o644)
+	j1 := NewJob(l, entry(t, l, filepath.Join(src, "a")), l, t.TempDir())
+	j2 := NewJob(l, entry(t, l, filepath.Join(src, "a")), l, t.TempDir())
+	q.Submit(j1)
+	q.Submit(j2)
+	q.Clear()
+	if len(q.Jobs()) != 0 {
+		t.Fatal("Clear should empty the list")
+	}
+	for i := 0; i < 2; i++ {
+		select {
+		case j := <-finished:
+			if s := j.Status(); s != Done && s != Cancelled {
+				t.Fatalf("job ended as %v", s)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("onFinished must still fire for cleared jobs")
+		}
+	}
 }

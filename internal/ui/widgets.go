@@ -239,3 +239,54 @@ func (f *fixedHeight) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	}
 	return fyne.NewSize(w, f.h)
 }
+
+// keyEntry is an Entry that also reports Escape, so text prompts can be
+// confirmed with Enter and dismissed with Escape.
+type keyEntry struct {
+	widget.Entry
+	OnEscape func()
+}
+
+func newKeyEntry() *keyEntry {
+	e := &keyEntry{}
+	e.ExtendBaseWidget(e)
+	return e
+}
+
+func newKeyPasswordEntry() *keyEntry {
+	e := newKeyEntry()
+	e.Password = true
+	return e
+}
+
+func (e *keyEntry) TypedKey(k *fyne.KeyEvent) {
+	if k.Name == fyne.KeyEscape && e.OnEscape != nil {
+		e.OnEscape()
+		return
+	}
+	e.Entry.TypedKey(k)
+}
+
+// tapArea is an invisible tappable filler placed behind other widgets so a
+// click on their empty space still does something.
+type tapArea struct {
+	widget.BaseWidget
+	onTap  func()
+	cursor desktop.Cursor
+}
+
+var _ desktop.Cursorable = (*tapArea)(nil)
+
+func newTapArea(onTap func()) *tapArea {
+	t := &tapArea{onTap: onTap, cursor: desktop.TextCursor}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tapArea) Tapped(*fyne.PointEvent) { t.onTap() }
+
+func (t *tapArea) Cursor() desktop.Cursor { return t.cursor }
+
+func (t *tapArea) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(canvas.NewRectangle(color.Transparent))
+}

@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -22,11 +23,22 @@ type transfersPanel struct {
 	summary *widget.Label
 	count   *pill
 	clear   *widget.Button
+	toggle  *widget.Button
 	header  *fyne.Container
-	empty   *widget.Label
-	content fyne.CanvasObject
-	done    chan struct{}
+	body    *fyne.Container
+	size    *fixedHeight
+
+	collapsed bool
+	onResize  func()
+	empty     *widget.Label
+	content   fyne.CanvasObject
+	done      chan struct{}
 }
+
+const (
+	transfersHeight  = 190
+	prefTransfersMin = "transfers.collapsed"
+)
 
 func newTransfersPanel(m *MainWindow) *transfersPanel {
 	t := &transfersPanel{m: m, done: make(chan struct{})}
@@ -47,18 +59,63 @@ func newTransfersPanel(m *MainWindow) *transfersPanel {
 	t.summary = newCaption("")
 	t.empty = newCaption("Drag a file or folder onto the other pane to copy it.")
 	t.empty.Alignment = fyne.TextAlignCenter
-	t.clear = newFlatButton("Clear finished", theme.DeleteIcon(), func() {
-		m.queue.ClearFinished()
-		t.refresh()
-	})
-	t.clear.Hide()
+	t.clear = newFlatButton("Clear", theme.DeleteIcon(), t.clearAll)
+	t.clear.Disable()
+	t.toggle = newFlatButton("", theme.MoveDownIcon(), func() { t.setCollapsed(!t.collapsed) })
+
 	title := widget.NewLabelWithStyle("Transfers", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	left := container.New(layout.NewCustomPaddedHBoxLayout(6), title, container.NewCenter(t.count), t.summary)
+	left := container.New(layout.NewCustomPaddedHBoxLayout(4), t.toggle, title, container.NewCenter(t.count), t.summary)
+	headerTap := newTapArea(func() { t.setCollapsed(!t.collapsed) })
+	headerTap.cursor = desktop.PointerCursor
 	t.header = container.NewBorder(nil, nil, left, t.clear)
-	body := container.NewStack(t.list, container.NewCenter(t.empty))
-	t.content = newCard(container.NewBorder(t.header, nil, nil, nil, body))
+	t.body = container.NewStack(t.list, container.NewCenter(t.empty))
+	t.size = &fixedHeight{transfersHeight}
+	t.content = container.New(t.size, newCard(container.NewBorder(
+		container.NewStack(headerTap, t.header), nil, nil, nil, t.body)))
+	t.setCollapsed(fyne.CurrentApp().Preferences().Bool(prefTransfersMin))
 	go t.tick()
 	return t
+}
+
+func (t *transfersPanel) setCollapsed(collapsed bool) {
+	t.collapsed = collapsed
+	fyne.CurrentApp().Preferences().SetBool(prefTransfersMin, collapsed)
+	if collapsed {
+		t.body.Hide()
+		t.toggle.SetIcon(theme.NavigateNextIcon())
+		t.size.h = t.header.MinSize().Height + 16
+	} else {
+		t.body.Show()
+		t.toggle.SetIcon(theme.MoveDownIcon())
+		t.size.h = transfersHeight
+	}
+	if t.onResize != nil {
+		t.onResize()
+	}
+}
+
+func (t *transfersPanel) clearAll() {
+	active := 0
+	for _, j := range t.jobs {
+		if !j.Status().Terminal() {
+			active++
+		}
+	}
+	if active == 0 {
+		t.m.queue.Clear()
+		t.refresh()
+		return
+	}
+	d := dialog.NewConfirm("Clear transfers",
+		fmt.Sprintf("%s still in progress or waiting. Stop and clear everything?", plural(active, "transfer")),
+		func(ok bool) {
+			if ok {
+				t.m.queue.Clear()
+				t.refresh()
+			}
+		}, t.m.win)
+	d.SetConfirmText("Stop and clear")
+	d.Show()
 }
 
 func (t *transfersPanel) stop() { close(t.done) }
@@ -106,10 +163,10 @@ func (t *transfersPanel) refresh() {
 			t.summary.SetText("All finished")
 		}
 	}
-	if active < len(t.jobs) {
-		t.clear.Show()
+	if len(t.jobs) > 0 {
+		t.clear.Enable()
 	} else {
-		t.clear.Hide()
+		t.clear.Disable()
 	}
 	t.header.Refresh()
 	t.list.Refresh()

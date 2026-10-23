@@ -25,7 +25,7 @@ func (p *Pane) buildChrome() {
 	home := newFlatButton("", theme.HomeIcon(), func() { p.navigate(p.home) })
 	refresh := newFlatButton("", theme.ViewRefreshIcon(), p.refreshAll)
 	newFolder := newFlatButton("", theme.FolderNewIcon(), func() { p.newFolder(p.root) })
-	p.hiddenBtn = newFlatButton("", theme.VisibilityOffIcon(), p.toggleHidden)
+	p.hiddenBtn = newFlatButton("", theme.VisibilityIcon(), p.toggleHidden)
 	label := "Copy to right"
 	if p.idx == 1 {
 		label = "Copy to left"
@@ -35,12 +35,15 @@ func (p *Pane) buildChrome() {
 	top := container.NewBorder(nil, nil, p.host, container.NewCenter(tools))
 
 	p.crumbs = container.New(layout.NewCustomPaddedHBoxLayout(0))
-	p.pathEntry = widget.NewEntry()
+	p.pathEntry = newKeyEntry()
 	p.pathEntry.OnSubmitted = func(s string) {
 		p.setEditingPath(false)
 		p.goToTyped(s)
 	}
-	p.pathStack = container.NewStack(container.NewHScroll(p.crumbs), p.pathEntry)
+	p.pathEntry.OnEscape = func() { p.setEditingPath(false) }
+	// Clicking anywhere in the address bar that is not a breadcrumb starts editing.
+	crumbArea := container.NewStack(newTapArea(func() { p.setEditingPath(true) }), container.NewHScroll(p.crumbs))
+	p.pathStack = container.NewStack(crumbArea, p.pathEntry)
 	p.editPath = newFlatButton("", theme.DocumentCreateIcon(), func() { p.setEditingPath(p.pathEntry.Hidden) })
 	pathBg := canvas.NewRectangle(colWindow)
 	pathBg.CornerRadius = 8
@@ -81,6 +84,7 @@ func (p *Pane) setEditingPath(editing bool) {
 	}
 	if editing {
 		p.pathEntry.SetText(p.root)
+		p.pathEntry.CursorColumn = len([]rune(p.root))
 		p.pathEntry.Show()
 		p.pathStack.Objects[0].Hide()
 		p.editPath.SetIcon(theme.CancelIcon())

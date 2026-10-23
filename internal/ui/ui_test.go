@@ -96,12 +96,12 @@ func TestPaneLazyLoadAndNavigate(t *testing.T) {
 		t.Fatalf("expected loading placeholder, got %q", got)
 	}
 	pump(t, "root listing", func() bool { _, ok := p.children[root]; return ok })
-	if got := strings.Join(names(p, root), ","); got != "dir,b.txt" {
-		t.Fatalf("children = %s", got)
+	if got := strings.Join(names(p, root), ","); got != "dir,.hidden,b.txt" {
+		t.Fatalf("hidden files should show by default, got %s", got)
 	}
 	p.toggleHidden()
-	if got := strings.Join(names(p, root), ","); got != "dir,.hidden,b.txt" {
-		t.Fatalf("with hidden = %s", got)
+	if got := strings.Join(names(p, root), ","); got != "dir,b.txt" {
+		t.Fatalf("after hiding = %s", got)
 	}
 
 	dir := filepath.Join(root, "dir")
@@ -305,4 +305,101 @@ func TestScreenshot(t *testing.T) {
 	}
 	defer f.Close()
 	png.Encode(f, m.win.Canvas().Capture())
+}
+
+func overlays(m *MainWindow) int { return len(m.win.Canvas().Overlays().List()) }
+
+func TestAddressBarClickEditsAndEscapeCancels(t *testing.T) {
+	m := newTestWindow(t)
+	p := m.panes[0]
+	root := t.TempDir()
+	p.navigate(root)
+	if !p.pathEntry.Hidden {
+		t.Fatal("address bar should start in breadcrumb mode")
+	}
+	var area *tapArea
+	for _, o := range test.LaidOutObjects(p.pathStack) {
+		if a, ok := o.(*tapArea); ok {
+			area = a
+		}
+	}
+	if area == nil {
+		t.Fatal("no clickable area behind the breadcrumbs")
+	}
+	test.Tap(area)
+	if p.pathEntry.Hidden || p.pathEntry.Text != root {
+		t.Fatalf("click should start editing the current path (hidden=%v text=%q)", p.pathEntry.Hidden, p.pathEntry.Text)
+	}
+	p.pathEntry.TypedKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+	if !p.pathEntry.Hidden || p.root != root {
+		t.Fatal("Escape should leave edit mode without navigating")
+	}
+}
+
+func TestNewFolderEnterCreatesEscapeCancels(t *testing.T) {
+	m := newTestWindow(t)
+	p := m.panes[0]
+	root := t.TempDir()
+	p.navigate(root)
+
+	p.newFolder(root)
+	entry, ok := m.win.Canvas().Focused().(*keyEntry)
+	if !ok {
+		t.Fatal("name field should be focused")
+	}
+	test.Type(entry, "made-with-enter")
+	entry.TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	pump(t, "folder created", func() bool {
+		fi, err := os.Stat(filepath.Join(root, "made-with-enter"))
+		return err == nil && fi.IsDir()
+	})
+
+	before := overlays(m)
+	p.newFolder(root)
+	if overlays(m) == before {
+		t.Fatal("dialog did not open")
+	}
+	entry = m.win.Canvas().Focused().(*keyEntry)
+	test.Type(entry, "cancelled")
+	entry.TypedKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+	if overlays(m) != before {
+		t.Fatal("Escape should close the dialog")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if _, err := os.Stat(filepath.Join(root, "cancelled")); err == nil {
+		t.Fatal("Escape must not create the folder")
+	}
+}
+
+func TestTransfersCollapseAndClear(t *testing.T) {
+	m := newTestWindow(t)
+	tp := m.transfers
+	tp.setCollapsed(false)
+	expanded := tp.content.MinSize().Height
+	tp.setCollapsed(true)
+	if !tp.body.Hidden || tp.content.MinSize().Height >= expanded {
+		t.Fatal("collapsing should hide the list and shrink the panel")
+	}
+	if !fyne.CurrentApp().Preferences().Bool(prefTransfersMin) {
+		t.Fatal("collapsed state should be remembered")
+	}
+	tp.setCollapsed(false)
+	if tp.body.Hidden || tp.content.MinSize().Height != expanded {
+		t.Fatal("expanding should restore the panel")
+	}
+
+	src, dst := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(src, "f"), []byte("x"), 0o644)
+	local := vfs.LocalFS{}
+	j := transfer.NewJob(local, vfs.Entry{Name: "f", Path: filepath.Join(src, "f")}, local, dst)
+	m.queue.Submit(j)
+	pump(t, "job", func() bool { return j.Status().Terminal() })
+	tp.refresh()
+	if tp.clear.Disabled() || len(tp.jobs) != 1 {
+		t.Fatal("Clear should be enabled with a finished job")
+	}
+	test.Tap(tp.clear)
+	if len(tp.jobs) != 0 || !tp.clear.Disabled() || tp.empty.Hidden {
+		t.Fatal("Clear should empty the list")
+	}
 }

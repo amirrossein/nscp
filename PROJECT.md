@@ -29,6 +29,13 @@ with Go and the Fyne UI toolkit. It is a two-pane, commander-style file manager 
 - If the destination already exists, NSCP asks: Overwrite / Skip / Overwrite all / Cancel.
 - Transfers queue in a panel at the bottom, which shows progress and lets you cancel.
 - File operations work in both panes: new folder, rename, delete.
+- Hidden (dot) files are shown by default; the eye button hides them per pane.
+- Clicking an empty part of the address bar (or the pencil) edits the path as text. Enter
+  goes there; Escape cancels.
+- The transfers panel collapses and expands (the state is remembered), and **Clear** empties it.
+  If transfers are still running or waiting, it asks before stopping them.
+- Text prompts (new folder, rename, password, passphrase) confirm with Enter and cancel with
+  Escape, using `keyEntry`.
 
 ---
 

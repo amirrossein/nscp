@@ -63,7 +63,7 @@ func (p *prompter) askSecret(title, message, label string) (sshclient.Secret, bo
 	}
 	ch := make(chan result, 1)
 	runOnMain(func() {
-		entry := widget.NewPasswordEntry()
+		entry := newKeyPasswordEntry()
 		remember := widget.NewCheck("Remember in system keychain", nil)
 		items := []*widget.FormItem{
 			widget.NewFormItem("", widget.NewLabel(message)),
@@ -73,6 +73,8 @@ func (p *prompter) askSecret(title, message, label string) (sshclient.Secret, bo
 		d := dialog.NewForm(title, "OK", "Cancel", items, func(ok bool) {
 			ch <- result{sshclient.Secret{Value: entry.Text, Remember: remember.Checked}, ok && entry.Text != ""}
 		}, p.win)
+		entry.OnSubmitted = func(string) { d.Submit() }
+		entry.OnEscape = d.Hide
 		d.Resize(fyne.NewSize(440, d.MinSize().Height))
 		d.Show()
 		p.win.Canvas().Focus(entry)

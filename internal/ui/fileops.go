@@ -62,7 +62,7 @@ func (p *Pane) runOp(reloadDir string, op func(ctx context.Context, fsys vfs.FS)
 }
 
 func (p *Pane) askName(title, initial string, ok func(string)) {
-	entry := widget.NewEntry()
+	entry := newKeyEntry()
 	entry.SetText(initial)
 	entry.Validator = func(s string) error {
 		if !vfs.ValidName(s) {
@@ -75,6 +75,8 @@ func (p *Pane) askName(title, initial string, ok func(string)) {
 			ok(entry.Text)
 		}
 	}, p.m.win)
+	entry.OnSubmitted = func(string) { d.Submit() }
+	entry.OnEscape = d.Hide
 	d.Resize(fyne.NewSize(420, d.MinSize().Height))
 	d.Show()
 	p.m.win.Canvas().Focus(entry)

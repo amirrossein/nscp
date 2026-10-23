@@ -61,8 +61,8 @@ func NewMainWindow(a fyne.App, deps Deps) *MainWindow {
 	m.transfers = newTransfersPanel(m)
 
 	panes := container.NewHSplit(m.panes[0].content, m.panes[1].content)
-	transfers := container.New(&fixedHeight{190}, m.transfers.content)
-	body := container.New(&fillFirst{gap: 10}, panes, transfers)
+	body := container.New(&fillFirst{gap: 10}, panes, m.transfers.content)
+	m.transfers.onResize = body.Refresh
 	m.win.SetContent(container.NewStack(
 		container.New(layout.NewCustomPaddedLayout(12, 12, 12, 12), body),
 		m.dnd.layer))

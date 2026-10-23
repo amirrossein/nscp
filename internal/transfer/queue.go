@@ -55,6 +55,18 @@ func (q *Queue) ClearFinished() {
 	q.jobs = kept
 }
 
+// Clear cancels every unfinished job and empties the list. Cancelled jobs stay
+// in the worker's backlog so onFinished still fires for each of them.
+func (q *Queue) Clear() {
+	q.mu.Lock()
+	jobs := q.jobs
+	q.jobs = nil
+	q.mu.Unlock()
+	for _, j := range jobs {
+		j.Cancel()
+	}
+}
+
 func (q *Queue) Close() {
 	q.mu.Lock()
 	for _, j := range q.jobs {
