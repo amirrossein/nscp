@@ -49,6 +49,7 @@ func newTransfersPanel(m *MainWindow) *transfersPanel {
 	)
 	t.list.HideSeparators = true
 	t.list.OnSelected = func(id widget.ListItemID) {
+		m.endPathEditing()
 		t.list.UnselectAll()
 		if id < len(t.jobs) {
 			t.showDetails(t.jobs[id])
@@ -59,13 +60,13 @@ func newTransfersPanel(m *MainWindow) *transfersPanel {
 	t.summary = newCaption("")
 	t.empty = newCaption("Drag a file or folder onto the other pane to copy it.")
 	t.empty.Alignment = fyne.TextAlignCenter
-	t.clear = newFlatButton("Clear", theme.DeleteIcon(), t.clearAll)
+	t.clear = newFlatButton("Clear", theme.DeleteIcon(), m.act(t.clearAll))
 	t.clear.Disable()
-	t.toggle = newFlatButton("", theme.MoveDownIcon(), func() { t.setCollapsed(!t.collapsed) })
+	t.toggle = newFlatButton("", theme.MoveDownIcon(), m.act(func() { t.setCollapsed(!t.collapsed) }))
 
 	title := widget.NewLabelWithStyle("Transfers", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	left := container.New(layout.NewCustomPaddedHBoxLayout(4), t.toggle, title, container.NewCenter(t.count), t.summary)
-	headerTap := newTapArea(func() { t.setCollapsed(!t.collapsed) })
+	headerTap := newTapArea(m.act(func() { t.setCollapsed(!t.collapsed) }))
 	headerTap.cursor = desktop.PointerCursor
 	t.header = container.NewBorder(nil, nil, left, t.clear)
 	t.body = container.NewStack(t.list, container.NewCenter(t.empty))

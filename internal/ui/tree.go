@@ -58,12 +58,14 @@ func (r *fileRow) placeholder() bool {
 }
 
 func (r *fileRow) Tapped(*fyne.PointEvent) {
+	r.pane.m.endPathEditing()
 	if !r.placeholder() {
 		r.pane.tree.Select(r.uid)
 	}
 }
 
 func (r *fileRow) DoubleTapped(*fyne.PointEvent) {
+	r.pane.m.endPathEditing()
 	if r.placeholder() {
 		return
 	}
@@ -73,6 +75,7 @@ func (r *fileRow) DoubleTapped(*fyne.PointEvent) {
 }
 
 func (r *fileRow) TappedSecondary(ev *fyne.PointEvent) {
+	r.pane.m.endPathEditing()
 	if r.placeholder() {
 		return
 	}
@@ -81,6 +84,7 @@ func (r *fileRow) TappedSecondary(ev *fyne.PointEvent) {
 }
 
 func (r *fileRow) Dragged(ev *fyne.DragEvent) {
+	r.pane.m.endPathEditing()
 	if !r.placeholder() {
 		r.pane.m.dnd.dragged(r.pane, r.uid, ev)
 	}
@@ -98,6 +102,27 @@ func (r *fileRow) setHighlight(on bool) {
 	}
 	r.bg.Refresh()
 }
+
+// paneTree is a Tree that also reacts to clicks on its empty area, which
+// otherwise reach no widget: it ends path editing and clears the selection.
+type paneTree struct {
+	widget.Tree
+	onBlankTap func()
+}
+
+var _ fyne.Tappable = (*paneTree)(nil)
+
+func newPaneTree(p *Pane) *paneTree {
+	t := &paneTree{onBlankTap: func() {
+		p.m.endPathEditing()
+		p.tree.UnselectAll()
+	}}
+	t.ChildUIDs, t.IsBranch, t.CreateNode, t.UpdateNode = p.childUIDs, p.isBranch, p.createNode, p.updateNode
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *paneTree) Tapped(*fyne.PointEvent) { t.onBlankTap() }
 
 func (p *Pane) createNode(bool) fyne.CanvasObject {
 	r := newFileRow(p)

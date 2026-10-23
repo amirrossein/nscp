@@ -403,3 +403,63 @@ func TestTransfersCollapseAndClear(t *testing.T) {
 		t.Fatal("Clear should empty the list")
 	}
 }
+
+func TestAddressBarLeavesEditModeWhenClickingElsewhere(t *testing.T) {
+	m := newTestWindow(t)
+	p := m.panes[0]
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "f.txt"), nil, 0o644)
+	p.navigate(root)
+	p.childUIDs(root)
+	pump(t, "listing", func() bool { _, ok := p.children[root]; return ok })
+	p.tree.Refresh()
+
+	editing := func() bool { return !p.pathEntry.Hidden }
+
+	// Clicking empty space: the canvas drops focus.
+	p.setEditingPath(true)
+	m.win.Canvas().Unfocus()
+	pump(t, "exit after focus loss", func() bool { return !editing() })
+
+	// Window losing focus (switching apps) keeps editing.
+	p.setEditingPath(true)
+	p.pathEntry.FocusLost()
+	for i := 0; i < 5; i++ {
+		select {
+		case f := <-mainQueue:
+			f()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if !editing() {
+		t.Fatal("a window-level focus loss must not end editing")
+	}
+
+	// Clicking a row or the tree's blank area, which keep the entry focused.
+	var row *fileRow
+	pump(t, "row", func() bool {
+		for r := range p.rows {
+			if r.uid == filepath.Join(root, "f.txt") {
+				row = r
+				return true
+			}
+		}
+		return false
+	})
+	test.Tap(row)
+	if editing() || p.selected != row.uid {
+		t.Fatal("clicking a row should end editing and select it")
+	}
+	p.setEditingPath(true)
+	test.Tap(p.tree)
+	if editing() || p.selected != "" {
+		t.Fatal("clicking the blank tree area should end editing and clear the selection")
+	}
+
+	// Editing in one pane ends when the other pane is used.
+	p.setEditingPath(true)
+	test.Tap(m.panes[1].host)
+	if editing() {
+		t.Fatal("using the other pane should end editing")
+	}
+}

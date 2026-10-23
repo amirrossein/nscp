@@ -244,7 +244,8 @@ func (f *fixedHeight) MinSize(objs []fyne.CanvasObject) fyne.Size {
 // confirmed with Enter and dismissed with Escape.
 type keyEntry struct {
 	widget.Entry
-	OnEscape func()
+	OnEscape    func()
+	OnFocusLost func()
 }
 
 func newKeyEntry() *keyEntry {
@@ -265,6 +266,13 @@ func (e *keyEntry) TypedKey(k *fyne.KeyEvent) {
 		return
 	}
 	e.Entry.TypedKey(k)
+}
+
+func (e *keyEntry) FocusLost() {
+	e.Entry.FocusLost()
+	if e.OnFocusLost != nil {
+		e.OnFocusLost()
+	}
 }
 
 // tapArea is an invisible tappable filler placed behind other widgets so a

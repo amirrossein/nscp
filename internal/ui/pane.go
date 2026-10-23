@@ -39,7 +39,7 @@ type Pane struct {
 
 	showHidden bool
 
-	tree      *widget.Tree
+	tree      *paneTree
 	host      *hostChip
 	crumbs    *fyne.Container
 	pathEntry *keyEntry
@@ -56,7 +56,7 @@ func newPane(m *MainWindow, idx int) *Pane {
 	p := &Pane{m: m, idx: idx, rows: map[*fileRow]struct{}{}, showHidden: true}
 	p.resetCache()
 
-	p.tree = widget.NewTree(p.childUIDs, p.isBranch, p.createNode, p.updateNode)
+	p.tree = newPaneTree(p)
 	p.tree.OnSelected = func(uid string) {
 		if strings.HasPrefix(uid, placeholderPrefix) {
 			p.tree.Unselect(uid)

@@ -19,18 +19,19 @@ const (
 )
 
 func (p *Pane) buildChrome() {
-	p.host = newHostChip(p.showHostMenu)
+	act := p.m.act
+	p.host = newHostChip(act(p.showHostMenu))
 
-	up := newFlatButton("", theme.MoveUpIcon(), p.goUp)
-	home := newFlatButton("", theme.HomeIcon(), func() { p.navigate(p.home) })
-	refresh := newFlatButton("", theme.ViewRefreshIcon(), p.refreshAll)
-	newFolder := newFlatButton("", theme.FolderNewIcon(), func() { p.newFolder(p.root) })
-	p.hiddenBtn = newFlatButton("", theme.VisibilityIcon(), p.toggleHidden)
+	up := newFlatButton("", theme.MoveUpIcon(), act(p.goUp))
+	home := newFlatButton("", theme.HomeIcon(), act(func() { p.navigate(p.home) }))
+	refresh := newFlatButton("", theme.ViewRefreshIcon(), act(p.refreshAll))
+	newFolder := newFlatButton("", theme.FolderNewIcon(), act(func() { p.newFolder(p.root) }))
+	p.hiddenBtn = newFlatButton("", theme.VisibilityIcon(), act(p.toggleHidden))
 	label := "Copy to right"
 	if p.idx == 1 {
 		label = "Copy to left"
 	}
-	copyBtn := widget.NewButtonWithIcon(label, theme.ContentCopyIcon(), p.copySelectedToOther)
+	copyBtn := widget.NewButtonWithIcon(label, theme.ContentCopyIcon(), act(p.copySelectedToOther))
 	tools := container.New(layout.NewCustomPaddedHBoxLayout(2), refresh, newFolder, p.hiddenBtn, copyBtn)
 	top := container.NewBorder(nil, nil, p.host, container.NewCenter(tools))
 
@@ -41,6 +42,7 @@ func (p *Pane) buildChrome() {
 		p.goToTyped(s)
 	}
 	p.pathEntry.OnEscape = func() { p.setEditingPath(false) }
+	p.pathEntry.OnFocusLost = p.pathFocusLost
 	// Clicking anywhere in the address bar that is not a breadcrumb starts editing.
 	crumbArea := container.NewStack(newTapArea(func() { p.setEditingPath(true) }), container.NewHScroll(p.crumbs))
 	p.pathStack = container.NewStack(crumbArea, p.pathEntry)
@@ -96,6 +98,22 @@ func (p *Pane) setEditingPath(editing bool) {
 	p.pathEntry.Hide()
 	p.pathStack.Objects[0].Show()
 	p.editPath.SetIcon(theme.DocumentCreateIcon())
+}
+
+// pathFocusLost leaves edit mode when focus moved elsewhere in the window.
+// FocusLost fires before the canvas records the new focus, and also when the
+// whole window loses focus, so the check runs one event later and keeps
+// editing if the entry still owns the canvas focus (e.g. the user switched apps).
+func (p *Pane) pathFocusLost() {
+	go runOnMain(func() {
+		if p.pathEntry.Hidden {
+			return
+		}
+		if c := fyne.CurrentApp().Driver().CanvasForObject(p.pathEntry); c != nil && c.Focused() == p.pathEntry {
+			return
+		}
+		p.setEditingPath(false)
+	})
 }
 
 type crumb struct {

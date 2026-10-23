@@ -31,7 +31,8 @@ with Go and the Fyne UI toolkit. It is a two-pane, commander-style file manager 
 - File operations work in both panes: new folder, rename, delete.
 - Hidden (dot) files are shown by default; the eye button hides them per pane.
 - Clicking an empty part of the address bar (or the pencil) edits the path as text. Enter
-  goes there; Escape cancels.
+  goes there. Escape or clicking anywhere else cancels. Clicks on the tree and on buttons
+  don't take focus in Fyne, so they call `MainWindow.endPathEditing` (via `m.act`) explicitly.
 - The transfers panel collapses and expands (the state is remembered), and **Clear** empties it.
   If transfers are still running or waiting, it asks before stopping them.
 - Text prompts (new folder, rename, password, passphrase) confirm with Enter and cancel with

@@ -78,6 +78,24 @@ func NewMainWindow(a fyne.App, deps Deps) *MainWindow {
 
 func (m *MainWindow) Window() fyne.Window { return m.win }
 
+// endPathEditing returns every address bar to breadcrumb mode. Clicks on
+// focusable widgets (the tree, buttons) don't take focus from the entry, so
+// interactive elements call this explicitly.
+func (m *MainWindow) endPathEditing() {
+	for _, p := range m.panes {
+		if p != nil && p.pathEntry != nil && !p.pathEntry.Hidden {
+			p.setEditingPath(false)
+		}
+	}
+}
+
+func (m *MainWindow) act(f func()) func() {
+	return func() {
+		m.endPathEditing()
+		f()
+	}
+}
+
 func (m *MainWindow) ShowAndRun() { m.win.ShowAndRun() }
 
 func (m *MainWindow) other(p *Pane) *Pane {
